@@ -163,6 +163,10 @@ def create_account(can_short: bool, username: str = Depends(verify_cookie)):
 @app.post("/users/accounts/{account_id}")
 def add_account(account_id: str, username: str = Depends(verify_cookie)):
 
+    raw_account = redis_client.hget(redis_dictionaries[1], account_id)
+    if not raw_account:
+        raise HTTPException(status_code=404, detail="This account does not exist")
+
     raw_user = redis_client.hget(redis_dictionaries[0], username)
     user_data = json.loads(raw_user)
 
@@ -244,6 +248,10 @@ def get_accounts_positions(account_id: str, username: str = Depends(verify_cooki
 @app.get("/positions/ticker/{ticker}")
 def get_users_positions_for_ticker(ticker: str, username: str = Depends(verify_cookie)):
 
+    raw_ticker = redis_client.hget(redis_dictionaries[2], ticker)
+    if not raw_ticker:
+        raise HTTPException(status_code=404, detail="This ticker does not exist")
+
     raw_user = redis_client.hget(redis_dictionaries[0], username)
     user_data = json.loads(raw_user)
 
@@ -283,6 +291,10 @@ def get_users_positions_for_ticker(ticker: str, username: str = Depends(verify_c
 def get_accounts_positions_for_ticker(
     ticker: str, account_id: str, username: str = Depends(verify_cookie)
 ):
+
+    raw_ticker = redis_client.hget(redis_dictionaries[2], ticker)
+    if not raw_ticker:
+        raise HTTPException(status_code=404, detail="This ticker does not exist")
 
     raw_user = redis_client.hget(redis_dictionaries[0], username)
     user_data = json.loads(raw_user)
