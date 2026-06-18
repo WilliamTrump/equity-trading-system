@@ -44,7 +44,7 @@ data:
           "id": 10,
           "options": {
             "enableLogDetails": true,
-            "sortOrder": "Descending"
+            "sortOrder": "Ascending"
           },
           "targets": [
             {
@@ -61,7 +61,7 @@ data:
           "id": 11,
           "options": {
             "enableLogDetails": true,
-            "sortOrder": "Descending"
+            "sortOrder": "Ascending"
           },
           "targets": [
             {
@@ -78,7 +78,7 @@ data:
           "id": 12,
           "options": {
             "enableLogDetails": true,
-            "sortOrder": "Descending"
+            "sortOrder": "Ascending"
           },
           "targets": [
             {
@@ -95,7 +95,7 @@ data:
           "id": 13,
           "options": {
             "enableLogDetails": true,
-            "sortOrder": "Descending"
+            "sortOrder": "Ascending"
           },
           "targets": [
             {
