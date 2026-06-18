@@ -12,6 +12,7 @@ spec:
   valuesContent: |-
     grafana:
       enabled: true
+      adminPassword: "Rust!"
       grafana.ini:
         dashboards:
           default_home_dashboard_path: /tmp/dashboards/dashboard.json

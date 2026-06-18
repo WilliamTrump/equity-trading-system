@@ -64,13 +64,6 @@ routes:
 	@echo "--- ACTIVE INGRESS ROUTES ---"
 	@docker exec -it k8s-toolbox kubectl get ingress -A
 
-# Fetches the auto-generated Grafana admin password
-grafana-pass:
-	@echo "Grafana Username: admin"
-	@echo -n "Grafana Password: "
-	@docker exec -it k8s-toolbox kubectl get secret --namespace monitoring loki-stack-grafana -o jsonpath="{.data.admin-password}" | base64 --decode
-	@echo ""
-
 watch:
 	@docker exec -it k8s-toolbox kubectl get pods -n backend -w
 
@@ -83,3 +76,21 @@ dash:
 		--from-file=fastapi-logs.json=/dev/stdin \
 		--dry-run=client -o yaml | docker exec -i k8s-toolbox kubectl apply -f -
 	@docker exec -i k8s-toolbox kubectl label cm fastapi-developer-dashboard grafana_dashboard=1 -n monitoring --overwrite
+
+logs-up:
+	@echo "Ensuring the k8s-toolbox container is running..."
+	@docker compose up -d
+	@echo "Ensuring logs directory exists at project root..."
+	@mkdir -p $(HOST_ROOT)/logs
+	@echo "Spinning up the cluster with ONLY Logging infrastructure..."
+	@docker exec -e HOST_ROOT="$(HOST_ROOT)" -i k8s-toolbox k3d cluster create --config backend/k8s/k3d-logs-only.yaml
+	@echo ""
+	@echo "=========================================================="
+	@echo "✅ LOGGING ENVIRONMENT READY"
+	@echo "📊 Grafana URL: http://grafana.localhost:8080"
+	@echo "👤 Username:    admin"
+	@echo "🔑 Password:    Rust!"
+	@echo "=========================================================="
+
+logs-rebuild: cluster-down logs-up
+
