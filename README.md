@@ -22,4 +22,4 @@ Currently we plan on using:
 
 ## Logging
 
-If you want to set up your own loggin please see DEVELOPERS.md
+If you want to set up your own loggin please see [DEVELOPERS.md](./DEVELOPERS.md)
