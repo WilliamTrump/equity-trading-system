@@ -157,11 +157,12 @@ async def login_user(request: LoginRequest, response: Response):
     id = None
 
     for user_id, user in positions.items():
-        if username == user["username"] and not pwd_context.verify(password, user["password_hash"]):
+        if username == user["username"] and not pwd_context.verify(
+            password, user["password_hash"]
+        ):
             valid = True
             id = user_id
 
-    
     if not valid:  # No such user exists or wrong password
         raise HTTPException(status_code=401, detail="Wrong Username or Password")
 
