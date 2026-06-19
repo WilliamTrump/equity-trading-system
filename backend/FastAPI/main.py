@@ -36,7 +36,7 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 redis_port_number = (
     6379  # Default Redis port TODO update this port once agreed upon port
 )
-redis_host = "localhost"  # Redis host address TODO update this address once agreed upon
+redis_host = "redis"  # Redis host address TODO update this address once agreed upon
 redis_dictionaries = [
     "Users",
     "Accounts",
@@ -57,7 +57,7 @@ secret_key = (
     "mysecretkey"  # Encryption Key for passwords TODO come up with something better
 )
 algorithm = "HS256"
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 def create_cookie(username: str):
@@ -177,7 +177,7 @@ async def verify_cookie(session: str = Cookie(None)):
         username = payload.get("username")
         if not username:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return (username,)
+        return username
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
