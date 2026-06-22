@@ -79,15 +79,21 @@ redis_dictionaries = [
 ]  # redis dicts TODO update these tables once agrred upon naming convention
 
 LOG_FILE = Path("../../logs/FastAPI/app.log")
-LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-file_handler = logbook.FileHandler(
-    LOG_FILE,
-    level='INFO',
-    format_string='[{record.time:%Y-%m-%d %H:%M:%S}] {record.level_name}: {record.channel}: {record.message}'
-)
+try:
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-file_handler.push_application()
+    file_handler = logbook.FileHandler(
+        LOG_FILE,
+        level="INFO",
+        format_string="[{record.time:%Y-%m-%d %H:%M:%S}] {record.level_name}: {record.channel}: {record.message}",
+    )
+
+    file_handler.push_application()
+
+except Exception as e:
+    print(f"LOGGING FAILED: {e}")
+    raise
 
 logger = logbook.Logger("FastAPI")
 
@@ -101,6 +107,7 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # Initialize Redis client
 redis_client = AsyncRedis(host=redis_host, port=redis_port_number, db=0)
+
 
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
@@ -125,33 +132,25 @@ async def logging_middleware(request: Request, call_next):
             logger.info(message)
 
         return response
-    
+
     except HTTPException:
         raise
-    
+
     except asyncpg.PostgresError as e:
         logger.error(f"PostgreSQL failure: {e}")
 
-        raise HTTPException(
-            status_code=503,
-            detail="Database unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
     except AsyncRedis.RedisError as e:
         logger.error(f"Redis failure: {e}")
 
-        raise HTTPException(
-            status_code=503,
-            detail="Redis unavailable"
-        )
+        raise HTTPException(status_code=503, detail="Redis unavailable")
 
     except Exception as e:
         logger.error(f"Unhandled exception: {e}")
 
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 def create_cookie(username: str):
 
@@ -368,7 +367,15 @@ async def get_all_accounts(user_id: str = Depends(verify_cookie)):
     raw_user = await redis_client.hget(redis_dictionaries[0], user_id)
     user_data = json.loads(raw_user)
 
-    return {"message": user_data["accounts_associated"]}
+    account_name = []
+    for account in user_data["accounts_associated"]:
+        account_raw = await redis_client.hget(redis_dictionaries[1], account)
+        accont_real = json.loads(account_raw)
+        account_name.append(accont_real["account_name"])
+
+    account_details = dict(zip(account_name, user_data["accounts_associated"]))
+
+    return {"accounts": account_details}
 
 
 # endregion
