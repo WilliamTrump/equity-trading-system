@@ -136,9 +136,17 @@ until $ENGINE exec k8s-toolbox kubectl get --raw /readyz >/dev/null 2>&1; do
 done
 echo "✅ API server is ready."
 
-# Also wait for Flux CRDs to be established before we apply
-# GitRepository/Kustomization objects, otherwise apply fails
-echo "⏳ Waiting for Flux CRDs..."
+# ============================================================
+# Bootstrapping Flux (Pure IaC)
+# ============================================================
+echo "📦 Bootstrapping Flux Controllers (Declarative Kustomize)..."
+
+# Apply the 4-line kustomization.yaml file directly from your repo.
+# Kubernetes will automatically download the required images in the background!
+$ENGINE exec -i k8s-toolbox kubectl apply -k "backend/k8s/flux-system"
+
+# Wait for Flux CRDs to be established before we apply targets
+echo "⏳ Waiting for Flux CRDs to initialize..."
 until $ENGINE exec k8s-toolbox kubectl get crd gitrepositories.source.toolkit.fluxcd.io >/dev/null 2>&1; do
     echo "   ...waiting for Flux CRDs"
     sleep 5

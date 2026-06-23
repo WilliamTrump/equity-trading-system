@@ -25,13 +25,3 @@ options:
   kubeconfig:
     updateDefaultKubeconfig: true
     switchCurrentContext: true
-volumes:
-  - volume: ${HOST_ROOT}/backend/Locust:/mnt/locust:z
-    nodeFilters:
-      - "all"
-files:
-  - description: "Bootstrap Flux Controllers only — targets are applied by cluster_up.sh"
-    source: ./flux-system/gotk-components.yaml
-    destination: /var/lib/rancher/k3s/server/manifests/01-gotk-components.yaml
-    nodeFilters:
-      - "server:*"
