@@ -46,10 +46,10 @@ echo "=========================================================="
 # Detect container engine
 # ============================================================
 ENGINE=""
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    ENGINE="docker"
-elif command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
+if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
     ENGINE="podman"
+elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    ENGINE="docker"
 else
     echo "❌ ERROR: Neither Docker nor Podman is running."
     exit 1

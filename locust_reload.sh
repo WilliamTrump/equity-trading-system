@@ -13,16 +13,19 @@ echo "=========================================================="
 echo "🔄 Reloading Locust configuration..."
 echo "=========================================================="
 
-# 1. Detect Container Engine
+# ============================================================
+# Detect container engine
+# ============================================================
 ENGINE=""
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-    ENGINE="docker"
-elif command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
+if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
     ENGINE="podman"
+elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    ENGINE="docker"
 else
     echo "❌ ERROR: Neither Docker nor Podman is running."
     exit 1
 fi
+echo "✅ Container engine: $ENGINE"
 
 # 2. Recreate the ConfigMap by piping the local Python file into the toolbox
 echo "📦 Updating ConfigMap 'locust-config'..."
