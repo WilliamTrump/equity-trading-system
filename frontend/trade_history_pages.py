@@ -12,13 +12,25 @@ from account_picker import account_select
 
 
 def _render_trades_table(result):
-    if result["status"] == "success":
-        if result["data"]:
-            st.table(result["data"])
-        else:
-            st.info("No trades found.")
-    else:
+    if result["status"] != "success":
         st.error(result["message"])
+        return
+
+    trades = result["data"]
+    if not trades:
+        st.info("No trades found.")
+        return
+
+    for trade in trades:
+        ticker = trade.get("symbol_ticker") or trade.get("ticker", "—")
+        with st.container(border=True):
+            cols = st.columns([3, 2, 2, 2, 3])
+            cols[0].write(f"**{trade.get('direction', '—')} {ticker}**")
+            cols[1].write(f"Qty: {trade.get('quantity', '—')}")
+            cols[2].write(f"${trade.get('price', '—')}")
+            cols[3].caption(f"`{trade.get('account_id', '—')}`")
+            if trade.get("created_at"):
+                cols[4].caption(f"Booked: {trade['created_at']}")
 
 
 @st.fragment(run_every="15s")
@@ -88,10 +100,27 @@ def render_trades_by_account_and_ticker_page():
 @st.fragment(run_every="15s")
 def _trade_by_id_fragment(trade_id):
     result = get_trade_by_id(trade_id)
-    if result["status"] == "success":
-        st.json(result["data"])
-    else:
+    if result["status"] != "success":
         st.error(result["message"])
+        return
+
+    trades = result["data"]
+    if not trades:
+        st.info("No trade found with that ID.")
+        return
+
+    for trade in trades:
+        ticker = trade.get("symbol_ticker") or trade.get("ticker", "—")
+        with st.container(border=True):
+            st.markdown(
+                f"**{trade.get('direction', '—')} {trade.get('quantity', '—')} {ticker}**"
+                f"  —  account `{trade.get('account_id', '—')}`"
+            )
+            cols = st.columns([2, 2, 2])
+            cols[0].caption(f"Price: ${trade.get('price', '—')}")
+            cols[1].caption(f"Trade ID: `{trade.get('trade_id', '—')}`")
+            if trade.get("created_at"):
+                cols[2].caption(f"Booked: {trade['created_at']}")
 
 
 def render_trade_by_id_page():
@@ -127,4 +156,9 @@ def render_update_trade_page():
             "price": price,
         }
         result = update_trade(trade_id, data)
-        st.json(result)
+        st.success(f"Trade `{result['trade_id']}` updated.")
+        updated = result["updated"]
+        st.caption(
+            f"**{updated['side']} {updated['quantity']} {updated['symbol']}** "
+            f"@ ${updated['price']}"
+        )

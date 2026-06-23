@@ -1,3 +1,5 @@
+import datetime
+
 import streamlit as st
 
 from api_client import (
@@ -9,14 +11,44 @@ from api_client import (
 from account_picker import account_select
 
 
+def _format_timestamp(value):
+    """Backend sends Unix timestamps (e.g. 1782243717.31) -- show them as
+    readable dates instead of raw floats."""
+    try:
+        return datetime.datetime.fromtimestamp(float(value)).strftime("%b %d, %Y %I:%M %p")
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _render_positions_result(result, empty_message="No positions found."):
-    if result["status"] == "success":
-        if result["data"]:
-            st.json(result["data"])
-        else:
-            st.info(empty_message)
-    else:
+    """Renders the {account_id: [position, ...]} shape shared by every
+    positions endpoint as readable cards instead of raw JSON."""
+    if result["status"] != "success":
         st.error(result["message"])
+        return
+
+    positions_by_account = result["data"].get("message", {}) if result["data"] else {}
+
+    if not positions_by_account:
+        st.info(empty_message)
+        return
+
+    for account_id, positions in positions_by_account.items():
+        # account_name isn't always present depending on the endpoint --
+        # fall back to just the account ID if it's missing.
+        account_label = positions[0].get("account_name") if positions else None
+        st.subheader(account_label or f"Account `{account_id}`")
+        if account_label:
+            st.caption(f"`{account_id}`")
+
+        for position in positions:
+            with st.container(border=True):
+                cols = st.columns([2, 2, 3])
+                cols[0].write(f"**{position.get('symbol_ticker', '—')}**")
+                cols[1].write(f"Qty: {position.get('quantity', '—')}")
+                cols[2].caption(f"Updated {_format_timestamp(position.get('updated_at'))}")
+
+        st.divider()
 
 
 @st.fragment(run_every="15s")

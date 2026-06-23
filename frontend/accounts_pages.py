@@ -74,4 +74,5 @@ def render_update_account_page():
                 "can_short": can_short,
             }
             result = update_user_account(account_id, data)
-            st.json(result)
+            st.success(f"Account `{result['account_id']}` updated.")
+            st.caption(f"Can Short: **{result['updated']['can_short']}**")
