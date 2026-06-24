@@ -5,10 +5,10 @@ from app.core.security import verify_cookie
 from app.models.trade_models import Trade
 from app.services.trade_services import individual_trade, verify_account_access
 
-app = APIRouter(tags=["Trades"])
+router = APIRouter(tags=["Trades"])
 
 
-@app.post("/trade")
+@router.post("/trade")
 async def create_trade(trade: list[Trade], user_id: str = Depends(verify_cookie)):
     logger.info("Recieved request to book trade data")
 
@@ -26,7 +26,7 @@ async def create_trade(trade: list[Trade], user_id: str = Depends(verify_cookie)
     return {"message": trade_return}
 
 
-@app.get("/trades")
+@router.get("/trades")
 async def get_all_user_trades(request: Request, user_id: str = Depends(verify_cookie)):
     logger.info("Recieved request for trade data")
 
@@ -43,7 +43,7 @@ async def get_all_user_trades(request: Request, user_id: str = Depends(verify_co
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/account/{account_id}")
+@router.get("/trades/account/{account_id}")
 async def get_all_user_trades_for_account(
     account_id: str, request: Request, user_id: str = Depends(verify_cookie)
 ):
@@ -66,7 +66,7 @@ async def get_all_user_trades_for_account(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/ticker/{ticker}")
+@router.get("/trades/ticker/{ticker}")
 async def get_all_user_trades_for_ticker(
     ticker: str, request: Request, user_id: str = Depends(verify_cookie)
 ):
@@ -87,7 +87,7 @@ async def get_all_user_trades_for_ticker(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/account/{account_id}/ticker/{ticker}")
+@router.get("/trades/account/{account_id}/ticker/{ticker}")
 async def get_all_user_trades_for_account_for_ticker(
     account_id: str,
     ticker: str,
@@ -115,7 +115,7 @@ async def get_all_user_trades_for_account_for_ticker(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/{trade_id}")
+@router.get("/trades/{trade_id}")
 async def get_specific_trade(
     trade_id: str, request: Request, user_id: str = Depends(verify_cookie)
 ):
@@ -136,7 +136,7 @@ async def get_specific_trade(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/time")
+@router.get("/trades/time")
 async def get_all_user_trades_for_time(
     request: Request,
     time_start: datetime,
@@ -161,7 +161,7 @@ async def get_all_user_trades_for_time(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/account/{account_id}/time")
+@router.get("/trades/account/{account_id}/time")
 async def get_all_user_trades_for_account_for_time(
     account_id: str,
     request: Request,
@@ -191,7 +191,7 @@ async def get_all_user_trades_for_account_for_time(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/ticker/{ticker}/time")
+@router.get("/trades/ticker/{ticker}/time")
 async def get_all_user_trades_for_ticker_for_time(
     ticker: str,
     request: Request,
@@ -219,7 +219,7 @@ async def get_all_user_trades_for_ticker_for_time(
     return [dict(row) for row in rows]
 
 
-@app.get("/trades/account/{account_id}/ticker/{ticker}/time")
+@router.get("/trades/account/{account_id}/ticker/{ticker}/time")
 async def get_all_user_trades_for_account_for_ticker_for_time(
     account_id: str,
     ticker: str,

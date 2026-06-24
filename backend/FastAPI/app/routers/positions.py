@@ -8,10 +8,10 @@ from app.services.position_services import (
     get_account_ticker_position,
 )
 
-app = APIRouter(tags=["Positions"])
+router = APIRouter(tags=["Positions"])
 
 
-@app.get("/positions")
+@router.get("/positions")
 async def get_users_positions(user_id: str = Depends(verify_cookie)):
     logger.info("Recieved request to get all of a user's positions")
 
@@ -20,7 +20,7 @@ async def get_users_positions(user_id: str = Depends(verify_cookie)):
     return {"message": positions}
 
 
-@app.get("/positions/accounts/{account_id}")
+@router.get("/positions/accounts/{account_id}")
 async def get_accounts_positions(
     account_id: str, user_id: str = Depends(verify_cookie)
 ):
@@ -31,7 +31,7 @@ async def get_accounts_positions(
     return {"message": positions}
 
 
-@app.get("/positions/ticker/{ticker}")
+@router.get("/positions/ticker/{ticker}")
 async def get_users_positions_for_ticker(
     ticker: str, user_id: str = Depends(verify_cookie)
 ):
@@ -42,7 +42,7 @@ async def get_users_positions_for_ticker(
     return {"message": positions}
 
 
-@app.get("/positions/accounts/{account_id}/ticker/{ticker}")
+@router.get("/positions/accounts/{account_id}/ticker/{ticker}")
 async def get_accounts_positions_for_ticker(
     ticker: str, account_id: str, user_id: str = Depends(verify_cookie)
 ):

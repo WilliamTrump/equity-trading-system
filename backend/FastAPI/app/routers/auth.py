@@ -5,10 +5,10 @@ from app.core.config import DAY_IN_SEC
 from app.models.auth_models import RegisterRequest, LoginRequest
 from app.services.auth_services import register_valid_user, login_valid_user
 
-app = APIRouter(tags=["Login"])
+router = APIRouter(tags=["Login"])
 
 
-@app.post("/register")
+@router.post("/register")
 async def register_user(request: RegisterRequest, response: Response):
     logger.info("Recieved new user request")
 
@@ -29,7 +29,7 @@ async def register_user(request: RegisterRequest, response: Response):
     return {"message": "User registered successfully", "user_id": f"{user_id}"}
 
 
-@app.post("/login")
+@router.post("/login")
 async def login_user(request: LoginRequest, response: Response):
     logger.info("Recieved new login request")
 
@@ -48,7 +48,7 @@ async def login_user(request: LoginRequest, response: Response):
     return {"message": "login succesful."}
 
 
-@app.post("/logout")
+@router.post("/logout")
 async def logout(response: Response):
     logger.info("Recieved new logout request")
     response.delete_cookie(key="session", httponly=True, samesite="lax")

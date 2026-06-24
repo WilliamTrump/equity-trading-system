@@ -3,12 +3,12 @@ import os
 import socket
 import time
 
-app = APIRouter(tags=["Health"])
+router = APIRouter(tags=["Health"])
 
 START_TIME = time.time()
 
 
-@app.get("/probe")
+@router.get("/probe")
 async def probe():
     hostname = socket.gethostname()  # In K8s, this defaults to the Pod Name
 

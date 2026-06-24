@@ -7,10 +7,10 @@ from app.services.account_services import (
     get_all_users_accounts,
 )
 
-app = APIRouter(tags=["Accounts"])
+router = APIRouter(tags=["Accounts"])
 
 
-@app.post("/users/account")
+@router.post("/users/account")
 async def create_account(
     account_name: str, can_short: bool, user_id: str = Depends(verify_cookie)
 ):
@@ -21,7 +21,7 @@ async def create_account(
     return {"message": "Account created", "account_id": f"{account_id}"}
 
 
-@app.post("/users/accounts/{account_id}")
+@router.post("/users/accounts/{account_id}")
 async def add_account(account_id: str, user_id: str = Depends(verify_cookie)):
     logger.info("Recieved new account sync to user request")
 
@@ -30,7 +30,7 @@ async def add_account(account_id: str, user_id: str = Depends(verify_cookie)):
     return {"message": f"Account added to user {username}"}
 
 
-@app.get("/users/allaccounts")
+@router.get("/users/allaccounts")
 async def get_all_accounts(user_id: str = Depends(verify_cookie)):
     logger.info("Recieved new get all user's accounts request")
 
