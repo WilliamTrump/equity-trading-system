@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.core.database import create_pool
 from app.core.redis import redis_client
 from app.core.logging import logger
@@ -50,13 +51,14 @@ async def lifespan(app: FastAPI):
     yield
 
     await app.state.pg_pool.close()
-    await app.state.redis.close()
+    await redis_client.close()
 
     logger.info("Closed connection to Postgres")
     logger.info("Closing down API")
 
 
 app = FastAPI(lifespan=lifespan)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 app.include_router(auth.router)
 app.include_router(accounts.router)
