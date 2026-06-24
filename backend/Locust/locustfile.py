@@ -22,7 +22,7 @@ class EquityTradingUser(HttpUser):
 
         self.account_id = response.json()["account_id"]
 
-    @task(10)
+    @task(25)
     def create_trade(self):
         ticker = random.choice([
             "AAPL",
@@ -45,14 +45,14 @@ class EquityTradingUser(HttpUser):
             ],
         )
 
-    @task(2)
+    @task(5)
     def get_positions(self):
         self.client.get("/positions")
 
-    @task(1)
+    @task(2)
     def get_trades(self):
         self.client.get("/trades")
 
-    @task
+    @task(1)
     def check_health(self):
         self.client.get("/probe")

@@ -32,6 +32,8 @@ async def lifespan(app: FastAPI):
             user=postgres_user,
             password=postgres_password,
             database=postgres_db,
+            min_size = 1,
+            max_size = 3
         )
         logger.info("Synced with postgres")
     except Exception as e:
