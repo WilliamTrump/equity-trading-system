@@ -91,6 +91,11 @@ else:
     if st.session_state.pop("jump_to_trade_page", False):
         st.session_state.nav_radio = label_for_page["Enter Trade"]
 
+    # Lets the empty My Accounts state send the user straight to
+    # Create Account.
+    if st.session_state.pop("jump_to_create_account_page", False):
+        st.session_state.nav_radio = label_for_page["Create Account"]
+
     st.sidebar.markdown("**Navigate**")
     selected_label = st.sidebar.radio(
         "Page", list(page_options.keys()), label_visibility="collapsed", key="nav_radio"

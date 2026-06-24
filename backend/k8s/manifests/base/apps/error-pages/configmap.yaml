@@ -1,0 +1,47 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: error-page-content
+  labels:
+    app: error-page
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Pod Crash | Equity Trading</title>
+        <style>
+            body { background-color: #f0f4f8; color: #334e68; font-family: system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; }
+            .spinner { width: 50px; height: 50px; border: 5px solid #d9e2ec; border-top-color: #3273dc; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            .container { max-width: 600px; padding: 20px; }
+            .highlight { color: #3273dc; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="spinner"></div>
+            <h1>Spawning New Pods...</h1>
+            <p>The Equity Trading interface is currently unavailable.</p>
+            <p>Our Kubernetes auto-healing is doing its magic right now. Assuming we haven't run out of cloud credits, we'll be back shortly.</p>
+            <p style="font-size: 0.85rem; margin-top: 30px;"><i>Psst... If anyone from the YU Comp Sci department is reading this, please send funds. K8s isn't cheap!</i></p>
+        </div>
+    </body>
+    </html>
+  default.conf: |
+    server {
+        listen 8080;
+        server_name _;
+        root /usr/share/nginx/html;
+
+        # Try to find the exact file. If not found, immediately serve index.html
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Catch explicit Nginx 404s and redirect internally to our HTML
+        error_page 404 /index.html;
+    }

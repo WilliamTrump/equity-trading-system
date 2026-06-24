@@ -1,0 +1,38 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-syncer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db-syncer
+  template:
+    metadata:
+      labels:
+        app: db-syncer
+    spec:
+      containers:
+        - name: db-syncer
+          image: ghcr.io/yscohen/db-syncer:latest
+          imagePullPolicy: Always
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: POSTGRES_PASSWORD
+
+            - name: POSTGRES_CONFIG
+              value: "host=postgres.data.svc.cluster.local user=$(POSTGRES_USER) password=$(POSTGRES_PASSWORD) dbname=trading"
+
+            - name: REDIS_URL
+              value: "redis://redis.data.svc.cluster.local:6379/"
+            - name: RUST_LOG
+              value: "debug"

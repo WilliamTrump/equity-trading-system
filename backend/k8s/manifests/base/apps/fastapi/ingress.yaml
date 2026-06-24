@@ -3,10 +3,10 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: fastapi-ingress
-  namespace: backend
 spec:
   rules:
-    - http:
+    - host: api.localhost
+      http:
         paths:
           - path: /
             pathType: Prefix

@@ -27,7 +27,11 @@ def _render_positions_result(result, empty_message="No positions found."):
         st.error(result["message"])
         return
 
-    positions_by_account = result["data"].get("message", {}) if result["data"] else {}
+    # NOTE: the data is the {account_id: [position, ...]} dict directly --
+    # no "message" wrapper key, despite what main.py's return statement
+    # might suggest. Confirmed against the raw st.json output that was
+    # working correctly before this page was rewritten.
+    positions_by_account = result["data"] if result["data"] else {}
 
     if not positions_by_account:
         st.info(empty_message)

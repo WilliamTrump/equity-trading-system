@@ -16,6 +16,9 @@ def _accounts_list_fragment():
 
     if not accounts:
         st.info("You don't have any accounts yet. Create one to get started.")
+        if st.button("➕ Open New Account", key="empty_state_create_account"):
+            st.session_state.jump_to_create_account_page = True
+            st.rerun(scope="app")
     else:
         for name, account_id in accounts.items():
             display_name = name or "(unnamed account)"

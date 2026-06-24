@@ -122,8 +122,12 @@ $ENGINE compose up -d --build
 sleep 2
 
 echo "🚀 Creating cluster (bootstrapping Flux controllers)..."
+
+# Use --no-host-dns to stop K3d from touching /etc/resolv.conf
 $ENGINE exec -e HOST_ROOT="$PROJECT_ROOT" -i k8s-toolbox \
-    k3d cluster create --config backend/k8s/k3d-config.yaml
+    k3d cluster create --config backend/k8s/k3d-config.yaml \
+    --k3s-arg "--resolv-conf=/tmp/custom-resolv.conf@server:*" \
+    --k3s-arg "--resolv-conf=/tmp/custom-resolv.conf@agent:*"
 
 # ============================================================
 # Wait for API server — check the API endpoint directly,
@@ -135,6 +139,31 @@ until $ENGINE exec k8s-toolbox kubectl get --raw /readyz >/dev/null 2>&1; do
     sleep 5
 done
 echo "✅ API server is ready."
+
+# ============================================================
+# Create Postgres Password
+# ============================================================
+
+echo "🔐 Generating db-credentials secret..."
+
+# Pre-create the namespaces that need the secret before Flux runs
+for NS in data backend secrets; do
+    $ENGINE exec -i k8s-toolbox kubectl create namespace "$NS" \
+        --dry-run=client -o yaml |
+        $ENGINE exec -i k8s-toolbox kubectl apply -f -
+done
+
+# Generate once, apply to all consumer namespaces
+PG_PASS=$(openssl rand -base64 24 | tr -d '=+/' | cut -c1-24)
+for NS in data backend; do
+    $ENGINE exec -i k8s-toolbox kubectl create secret generic db-credentials \
+        --from-literal=POSTGRES_USER=trade_admin \
+        --from-literal=POSTGRES_PASSWORD="$PG_PASS" \
+        --namespace="$NS" \
+        --dry-run=client -o yaml |
+        $ENGINE exec -i k8s-toolbox kubectl apply -f -
+done
+echo "✅ db-credentials created in data and backend namespaces."
 
 # ============================================================
 # Bootstrapping Flux (Pure IaC)
@@ -171,11 +200,13 @@ echo ""
 echo "📈 ======================================================= 📈"
 echo "               BULL MARKET ENGAGED: SYSTEM LIVE              "
 echo " --------------------------------------------------------- "
-echo " 🟢 API Gateway       -> http://localhost:8080"
+echo " 🟢 API Gateway       -> http://api.localhost:8080"
 echo " 📊 Streamlit UI      -> http://streamlit.localhost:8080"
 echo " 🦗 Locust Load Test  -> http://locust.localhost:8080"
 echo " 🔭 Grafana Metrics   -> http://grafana.localhost:8080"
+echo " 🐘 Adminer Database  -> http://adminer.localhost:8080"
 echo " "
-echo " 🔐 Default Credentials:"
-echo "    User: admin  |  Pass: Rust!"
+echo " 🔐 Default System Credentials:"
+echo "    Grafana UI -> User: admin | Pass: Rust!"
+echo "    PostgreSQL -> User: trade_admin | Pass: $PG_PASS"
 echo "📈 ======================================================= 📈"

@@ -3,7 +3,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: trade-writer
-  namespace: backend
 spec:
   replicas: 1
   selector:
@@ -31,10 +30,10 @@ spec:
                   key: POSTGRES_PASSWORD
 
             - name: POSTGRES_CONFIG
-              value: "host=postgres.backend.svc.cluster.local user=$(POSTGRES_USER) password=$(POSTGRES_PASSWORD) dbname=trading"
+              value: "host=postgres.data.svc.cluster.local user=$(POSTGRES_USER) password=$(POSTGRES_PASSWORD) dbname=trading"
 
             - name: REDIS_URL
-              value: "redis://redis.backend.svc.cluster.local:6379/"
+              value: "redis://redis.data.svc.cluster.local:6379/"
             - name: REDIS_STREAM_NAME
               value: "trade_stream"
             - name: REDIS_CONSUMER_GROUP
