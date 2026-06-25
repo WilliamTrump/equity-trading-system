@@ -13,19 +13,14 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_PREFIX: ${{ github.repository | downcase }}
 
 jobs:
-  # ==========================================
-  # 🚀 FAST BUILD: Standard AMD/Intel
-  # ==========================================
   build-amd64:
     name: ⚡ AMD64 (${{ matrix.component }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     strategy:
       fail-fast: false
       matrix:
@@ -42,39 +37,19 @@ jobs:
           - component: db-syncer
             context: db/redis-postgres-syncers
             dockerfile: db/redis-postgres-syncers/Containerfile.db-syncer
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Set lowercased repo
+        id: vars
+        run: echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+      - name: Log in to registry
         if: github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}
-          tags: |
-            type=raw,value=latest-amd64,enable={{is_default_branch}}
-            type=sha,prefix=sha-,suffix=-amd64,format=short
-
-      - name: Debug Variables
-        run: |
-          echo "Full Repository Path: ${{ github.repository }}"
-          echo "Component: ${{ matrix.component }}"
-          BASE_IMG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.component }}"
-          echo "Constructed Path: $BASE_IMG"
-          echo "Lowercase Path: $(echo $BASE_IMG | tr '[:upper:]' '[:lower:]')"
-
       - name: Build and push AMD64
         uses: docker/build-push-action@v5
         with:
@@ -82,21 +57,16 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ steps.vars.outputs.REPO_LOWER }}/${{ matrix.component }}:latest-amd64
           cache-from: type=gha,scope=${{ matrix.component }}-amd64
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}-amd64
 
-  # ==========================================
-  # 🐢 SLOW BUILD: Emulated Apple Silicon (ARM)
-  # ==========================================
   build-arm64:
     name: 🐢 ARM64 (${{ matrix.component }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     strategy:
       fail-fast: false
       matrix:
@@ -113,34 +83,20 @@ jobs:
           - component: db-syncer
             context: db/redis-postgres-syncers
             dockerfile: db/redis-postgres-syncers/Containerfile.db-syncer
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU (Required for ARM Emulation)
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Set lowercased repo
+        id: vars
+        run: echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+      - name: Log in to registry
         if: github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}
-          tags: |
-            type=raw,value=latest-arm64,enable={{is_default_branch}}
-            type=sha,prefix=sha-,suffix=-arm64,format=short
-
       - name: Build and push ARM64
         uses: docker/build-push-action@v5
         with:
@@ -148,49 +104,31 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/arm64
           push: ${{ github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ steps.vars.outputs.REPO_LOWER }}/${{ matrix.component }}:latest-arm64
           cache-from: type=gha,scope=${{ matrix.component }}-arm64
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}-arm64
 
-  # ==========================================
-  # 🔗 MERGE MANIFESTS: Combine AMD & ARM
-  # ==========================================
   merge-manifests:
     name: 🔗 Merge Manifests (${{ matrix.component }})
     runs-on: ubuntu-latest
     needs: [build-amd64, build-arm64]
     if: github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
-    permissions:
-      contents: read
-      packages: write
     strategy:
-      fail-fast: false
       matrix:
-        include:
-          - component: api
-          - component: web-ui
-          - component: trade-writer
-          - component: db-syncer
+        component: [api, web-ui, trade-writer, db-syncer]
     steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create Multi-Arch Manifest
         run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          # Force the entire BASE_IMG path to lowercase here, as an extra safety measure
-          BASE_IMG=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.component }}" | tr '[:upper:]' '[:lower:]')
-
+          REPO_LOWER="${GITHUB_REPOSITORY,,}"
+          BASE_IMG="${{ env.REGISTRY }}/$REPO_LOWER/${{ matrix.component }}"
+          
           docker buildx imagetools create \
             -t $BASE_IMG:latest \
-            -t $BASE_IMG:sha-$SHORT_SHA \
             $BASE_IMG:latest-amd64 \
             $BASE_IMG:latest-arm64
