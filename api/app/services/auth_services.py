@@ -28,7 +28,7 @@ async def register_valid_user(username: str, password: str):
     }
     # send new User to redis
     await redis_client.hset(redis_dictionaries[0], user_id, json.dumps(user_data))
-    await redis_client.hset(redis_dictionaries[3], username, json.dumps(user_id))
+    await redis_client.hset(redis_dictionaries[3], username, user_id)
 
     return user_id
 
@@ -41,6 +41,8 @@ async def login_valid_user(username: str, password: str):
         logger.warning("Invalid login attempt")
         raise HTTPException(status_code=401, detail="Wrong Username or Password")
 
+    old_uuid = old_uuid.decode() if isinstance(old_uuid, bytes) else old_uuid
+    
     raw_user_data = await redis_client.hget(redis_dictionaries[0], old_uuid)
     real_user_data = json.loads(raw_user_data)
     if not pwd_context.verify(password, real_user_data["oauth_key"]):
