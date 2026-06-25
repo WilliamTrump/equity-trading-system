@@ -9,6 +9,8 @@ use std::env;
 use std::fmt::Write;
 use tokio_postgres::NoTls;
 use tracing::{debug, error, info, warn};
+use tracing_loki::url::Url;
+use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Deserialize)]
 struct TradePayload {
@@ -26,19 +28,48 @@ struct TradePayload {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
+    let _ = dotenv();
+
+    if let Err(err) = init_tracing() {
+        eprintln!("failed to initialize tracing: {}", err);
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        std::process::exit(1);
+    }
+
     info!("=== STARTING TRADE WRITER ===");
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
         error!(%err, "Fatal application initialization error");
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = dotenv();
+fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
+    let loki_url = env::var("LOKI_URL").map_err(|_| "LOKI_URL must be set")?;
+    let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
 
+    let loki_url = Url::parse(&loki_url)?;
+    let (loki_layer, loki_task) = tracing_loki::builder()
+        .label("app", "trade-writer")?
+        .label("pod", worker_name)?
+        .build_url(loki_url)?;
+
+    tracing_subscriber::registry()
+        .with(LevelFilter::DEBUG)
+        .with(loki_layer)
+        // .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
+        .init();
+
+    tokio::spawn(loki_task);
+
+    debug!("connected to loki");
+
+    Ok(())
+}
+
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let pg_config = env::var("POSTGRES_CONFIG").map_err(|_| "POSTGRES_CONFIG must be set")?;
     let redis_url = env::var("REDIS_URL").map_err(|_| "REDIS_URL must be set")?;
     let stream_name = env::var("REDIS_STREAM_NAME").map_err(|_| "REDIS_STREAM_NAME must be set")?;
