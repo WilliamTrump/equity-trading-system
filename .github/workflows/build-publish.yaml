@@ -1,6 +1,10 @@
 ---
 name: CI/CD - Build and Publish Images
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push:
     branches: ["main"]
@@ -47,9 +51,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
-        if: |
-          github.event_name != 'pull_request' &&
-          github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
+        if: github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -60,8 +62,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.component }}
-          # Appending -amd64 to safely store it until the merge job
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}
           tags: |
             type=raw,value=latest-amd64,enable={{is_default_branch}}
             type=sha,prefix=sha-,suffix=-amd64,format=short
@@ -72,9 +73,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
-          push: |
-            ${{ github.event_name != 'pull_request' &&
-                github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
+          push: ${{ github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.component }}-amd64
@@ -118,9 +117,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
-        if: |
-          github.event_name != 'pull_request' &&
-          github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
+        if: github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -131,8 +128,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.component }}
-          # Appending -arm64 so it doesn't overwrite the fast AMD tag
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}
           tags: |
             type=raw,value=latest-arm64,enable={{is_default_branch}}
             type=sha,prefix=sha-,suffix=-arm64,format=short
@@ -143,9 +139,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/arm64
-          push: |
-            ${{ github.event_name != 'pull_request' &&
-                github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
+          push: ${{ github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.component }}-arm64
@@ -157,18 +151,11 @@ jobs:
   merge-manifests:
     name: 🔗 Merge Manifests (${{ matrix.component }})
     runs-on: ubuntu-latest
-    # Wait for both builds to finish before trying to merge them
     needs: [build-amd64, build-arm64]
-
-    # Only run the merge job if we actually pushed the images to the main repo
-    if: |
-      github.event_name != 'pull_request' &&
-      github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
-
+    if: github.event_name != 'pull_request' && github.repository == 'SM26-Industrial-Software-Dev/equity-trading-system'
     permissions:
       contents: read
       packages: write
-
     strategy:
       fail-fast: false
       matrix:
@@ -177,7 +164,6 @@ jobs:
           - component: web-ui
           - component: trade-writer
           - component: db-syncer
-
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -191,11 +177,9 @@ jobs:
 
       - name: Create Multi-Arch Manifest
         run: |
-          # Calculate the short git SHA format (first 7 characters)
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           BASE_IMG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}/${{ matrix.component }}"
 
-          # Use docker buildx imagetools to stitch the temporary tags into final official tags
           docker buildx imagetools create \
             -t $BASE_IMG:latest \
             -t $BASE_IMG:sha-$SHORT_SHA \
