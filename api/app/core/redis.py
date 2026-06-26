@@ -6,7 +6,7 @@ pool = ConnectionPool(
     host=redis_host,
     port=redis_port_number,
     db=0,
-    max_connections=computed_max_connections
+    max_connections=computed_max_connections,
 )
 
 redis_client = Redis(connection_pool=pool)
