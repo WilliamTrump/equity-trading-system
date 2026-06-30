@@ -37,7 +37,7 @@ if command -v resolvectl >/dev/null 2>&1 && [[ "$OS_ID" != "cachyos" ]] && [[ "$
     echo '   }'
     echo "   (Remember to run 'sudo systemctl restart docker' after updating)"
     echo "----------------------------------------------------------"
-    
+
     read -p "❓ Have you verified your container DNS configuration? (y/N): " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo "❌ Exiting. Please update your DNS settings and run this script again."
@@ -239,7 +239,7 @@ $ENGINE exec -i k8s-toolbox \
 # ============================================================
 echo "⚡ Forcing Flux sync..."
 $ENGINE exec -i k8s-toolbox flux reconcile source git "$REPO_NAME"
-$ENGINE exec -i k8s-toolbox flux reconcile kustomization dev-stack --with-source
+$ENGINE exec -i k8s-toolbox flux reconcile kustomization 1-infra --with-source
 
 echo ""
 echo "📈 ======================================================= 📈"

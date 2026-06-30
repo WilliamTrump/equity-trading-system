@@ -7,12 +7,13 @@ metadata:
 spec:
   scaleTargetRef:
     name: trade-writer
+  pollingInterval: 5
   minReplicaCount: 1
   maxReplicaCount: 5
   triggers:
     - type: redis-streams
       metadata:
-        addressFromEnv: REDIS_URL
+        addressFromEnv: REDIS_ADDRESS
         stream: INJECTED_BY_KUSTOMIZE # Placeholder
         consumerGroup: INJECTED_BY_KUSTOMIZE # Placeholder
         lagCount: "5000"
