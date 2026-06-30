@@ -37,14 +37,6 @@ if command -v resolvectl >/dev/null 2>&1 && [[ "$OS_ID" != "cachyos" ]] && [[ "$
     echo '   }'
     echo "   (Remember to run 'sudo systemctl restart docker' after updating)"
     echo "----------------------------------------------------------"
-
-    read -p "❓ Have you verified your container DNS configuration? (y/N): " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "❌ Exiting. Please update your DNS settings and run this script again."
-        exit 1
-    fi
-    echo "✅ DNS configuration confirmed. Proceeding..."
-    echo ""
 fi
 
 # ============================================================
