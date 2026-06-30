@@ -6,3 +6,4 @@ namespace: backend
 
 resources:
   - deployment.yaml
+  - scaledObject.yaml

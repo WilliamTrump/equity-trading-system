@@ -76,7 +76,10 @@ spec:
               value: "host=$(PG_ROUTING_HOST) port=$(PG_ROUTING_PORT) user=$(POSTGRES_USER) password=$(POSTGRES_PASSWORD) dbname=$(PG_DATABASE)"
 
             - name: REDIS_URL
-              value: "redis://redis.data.svc.cluster.local:6379/"
+              valueFrom:
+                configMapKeyRef:
+                  name: redis-config
+                  key: REDIS_URL
             - name: RUST_LOG
               value: "debug"
 

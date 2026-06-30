@@ -48,3 +48,35 @@ configMapGenerator:
       - shared-config/db-routing.env
     options:
       disableNameSuffixHash: true
+
+  - name: redis-config
+    namespace: backend
+    envs:
+      - shared-config/redis-config.env
+    options:
+      disableNameSuffixHash: true
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: redis-config
+      namespace: backend
+      fieldPath: data.REDIS_STREAM_NAME
+    targets:
+      - select:
+          kind: ScaledObject
+          name: trade-writer-scaler
+        fieldPaths:
+          - spec.triggers.*.metadata.stream
+
+  - source:
+      kind: ConfigMap
+      name: redis-config
+      namespace: backend
+      fieldPath: data.REDIS_CONSUMER_GROUP
+    targets:
+      - select:
+          kind: ScaledObject
+          name: trade-writer-scaler
+        fieldPaths:
+          - spec.triggers.*.metadata.consumerGroup
