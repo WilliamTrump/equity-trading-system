@@ -3,35 +3,21 @@
 use dotenvy::dotenv;
 use futures_util::SinkExt;
 use redis::AsyncCommands;
-use redis::streams::{StreamReadOptions, StreamReadReply};
+use redis::streams::{
+    StreamDeletionPolicy, StreamReadOptions, StreamReadReply, StreamTrimOptions, StreamTrimmingMode,
+};
 use serde::Deserialize;
 use std::env;
 use std::fmt::Write;
 use tokio_postgres::NoTls;
 use tracing::{debug, error, info, warn};
-use tracing_loki::url::Url;
-use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
-
-#[derive(Deserialize)]
-struct TradePayload {
-    trade_id: String,
-    account_id: String,
-    user_id: String,
-    direction: String,
-    symbol_ticker: String,
-    created_at: i64,
-    updated_at: i64,
-    quantity: i32,
-    price: String,
-    other_account: Option<String>,
-}
 
 #[tokio::main]
 async fn main() {
     let _ = dotenv();
 
-    if let Err(err) = init_tracing() {
-        eprintln!("failed to initialize tracing: {}", err);
+    if let Err(err) = helpers::init_tracing("trade-writer") {
+        eprintln!("failed to initialize tracing: {:?}", err);
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
@@ -40,33 +26,10 @@ async fn main() {
 
     // Run the main pipeline and catch any fatal initialization errors
     if let Err(err) = run().await {
-        error!(%err, "Fatal application initialization error");
+        error!(?err, "Fatal application initialization error");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         std::process::exit(1);
     }
-}
-
-fn init_tracing() -> Result<(), Box<dyn std::error::Error>> {
-    let loki_url = env::var("LOKI_URL").map_err(|_| "LOKI_URL must be set")?;
-    let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
-
-    let loki_url = Url::parse(&loki_url)?;
-    let (loki_layer, loki_task) = tracing_loki::builder()
-        .label("app", "trade-writer")?
-        .label("pod", worker_name)?
-        .build_url(loki_url)?;
-
-    tracing_subscriber::registry()
-        .with(LevelFilter::DEBUG)
-        .with(loki_layer)
-        // .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
-        .init();
-
-    tokio::spawn(loki_task);
-
-    debug!("connected to loki");
-
-    Ok(())
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -78,9 +41,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let worker_name = env::var("WORKER_NAME").map_err(|_| "WORKER_NAME must be set")?;
 
     debug!("read env vars");
-
-    // wait for DB servers to come up
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     // Connect to postgres
     let (pg_client, connection) = tokio_postgres::connect(&pg_config, NoTls).await?;
@@ -102,10 +62,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .await;
 
     if let Err(e) = group_create_result {
-        if !e.to_string().contains("BUSYGROUP") {
-            error!("Initializing consumer group failed: {}", e);
-        } else {
+        if e.to_string().contains("BUSYGROUP") {
             debug!("Consumer group '{}' already exists", consumer_group);
+        } else {
+            error!("Initializing consumer group failed: {}", e);
         }
     }
 
@@ -117,20 +77,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // buffer to hold bulk COPY data. Pre-allocating ~500KB to avoid reallocations
     let mut copy_payload_buffer = String::with_capacity(512_000);
 
-    loop {
-        // Fetch batches from the configured redis stream
-        let opts = StreamReadOptions::default()
-            .group(&consumer_group, &worker_name)
-            .count(5000) // TODO: determine best number
-            .block(100);
+    // opts to fetch batches from the configured redis stream
+    let opts = StreamReadOptions::default()
+        .group(&consumer_group, &worker_name)
+        .count(5000) // TODO: determine best number
+        .block(100);
 
-        // (these two vars need to be assigned because of lifetime magic in the select! macro)
-        let keys = [&stream_name];
-        let ids = [&stream_id];
+    loop {
+        // (these two vars need to be assigned because of lifetime witchcraft in the select macro)
+        let stream_name_arr = [&stream_name];
+        let stream_id_arr = [&stream_id];
 
         // Select between waiting for Redis stream entries or a shutdown signal:
         let reply: StreamReadReply = tokio::select! {
-            res = redis_conn.xread_options(&keys, &ids, &opts) => {
+            res = redis_conn.xread_options(&stream_name_arr, &stream_id_arr, &opts) => {
                 match res {
                     Ok(r) => r,
                     Err(e) => {
@@ -140,13 +100,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
-            _ = shutdown_signal() => {
+            () = helpers::shutdown_signal() => {
                 info!("Shutdown signal received. Exiting loop gracefully...");
                 return Ok(());
             }
         };
 
-        // If reading pending entries ("0") returns empty, switch to new entries (">")
         if reply.keys.is_empty() || reply.keys[0].ids.is_empty() {
             if stream_id == "0" {
                 info!("Finished processing pending entries, switching to new messages.");
@@ -155,57 +114,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
 
-        let mut msg_ids = Vec::new();
-        copy_payload_buffer.clear(); // Clear the buffer for the new batch
-
-        for stream_key in reply.keys {
-            for record in stream_key.ids {
-                msg_ids.push(record.id.clone());
-
-                let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
-                    warn!("Redis message {} missing binary field 'd'", record.id);
-                    continue; // Skip malformed record
-                };
-
-                let trade: TradePayload = match rmp_serde::from_slice(bytes) {
-                    Ok(t) => t,
-                    Err(e) => {
-                        warn!("Failed to decode payload for {}: {}", record.id, e);
-                        continue; // Skip badly serialized record
-                    }
-                };
-
-                let created = jiff::Timestamp::from_second(trade.created_at)
-                    .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
-                    .unwrap_or_else(|_| "\\N".to_string());
-
-                let updated = jiff::Timestamp::from_second(trade.updated_at)
-                    .map(|z| z.strftime("%Y-%m-%d %H:%M:%S").to_string())
-                    .unwrap_or_else(|_| "\\N".to_string());
-
-                let other_acc = trade
-                    .other_account
-                    .as_deref()
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or("\\N");
-
-                // OPTIMIZATION: Write directly into the single pre-allocated String buffer
-                let _ = writeln!(
-                    &mut copy_payload_buffer,
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    trade.trade_id,
-                    trade.account_id,
-                    trade.user_id,
-                    trade.direction,
-                    trade.symbol_ticker,
-                    created,
-                    updated,
-                    trade.quantity,
-                    trade.price,
-                    other_acc
-                );
-            }
-        }
+        let msg_ids = build_payload_buffer(&mut copy_payload_buffer, reply);
 
         // If we parsed 0 valid rows but have msg_ids, we must ACK them so they don't get stuck.
         if copy_payload_buffer.is_empty() {
@@ -213,9 +122,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 "Decoded no valid rows, ACKing {} bad messages to discard them.",
                 msg_ids.len()
             );
-            let _: Result<(), _> = redis_conn
-                .xack(&stream_name, &consumer_group, &msg_ids)
-                .await;
+            if let Err(e) =
+                ack_and_trim_stream(&mut redis_conn, &stream_name, &consumer_group, &msg_ids).await
+            {
+                error!("Failed to ACK and trim messages in Redis: {}", e);
+            }
             continue;
         }
 
@@ -239,40 +150,93 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
 
-                // Acknowledge messages in Redis ONLY after Postgres confirms write
-                match redis_conn
-                    .xack(&stream_name, &consumer_group, &msg_ids)
+                // xack and trim messages in redis ONLY after postgres confirms write
+                match ack_and_trim_stream(&mut redis_conn, &stream_name, &consumer_group, &msg_ids)
                     .await
                 {
-                    Ok(()) => info!("Successfully copied and ACK'd {} rows", msg_ids.len()),
-                    Err(e) => error!("Failed to ACK messages in Redis: {}", e),
+                    Ok(()) => info!(
+                        "Successfully copied, ACK'd, and trimmed {} rows",
+                        msg_ids.len()
+                    ),
+                    Err(e) => error!("Failed to ACK and trim messages in Redis: {}", e),
                 }
             }
             Err(e) => {
-                error!("Failed to initialize Postgres COPY context: {}", e);
+                error!("Failed to initialize postgres COPY context: {}", e);
             }
         }
     }
 }
 
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install SIGTERM handler");
-    };
+fn build_payload_buffer(copy_payload_buffer: &mut String, reply: StreamReadReply) -> Vec<String> {
+    let mut msg_ids = Vec::new();
+    copy_payload_buffer.clear(); // Clear the buffer for the new batch
 
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
+    for stream_key in reply.keys {
+        for record in stream_key.ids {
+            msg_ids.push(record.id.clone());
 
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
+            let Some(redis::Value::BulkString(bytes)) = record.map.get("d") else {
+                warn!("Redis message {} missing binary field 'd'", record.id);
+                continue; // Skip malformed record
+            };
+
+            let trade: TradePayload = match rmp_serde::from_slice(bytes) {
+                Ok(t) => t,
+                Err(e) => {
+                    warn!("Failed to decode payload for {}: {}", record.id, e);
+                    continue; // Skip badly serialized record
+                }
+            };
+
+            let created = jiff::Timestamp::from_second(trade.created_at).map_or_else(
+                |_| "\\N".to_string(),
+                |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+            );
+
+            let updated = jiff::Timestamp::from_second(trade.updated_at).map_or_else(
+                |_| "\\N".to_string(),
+                |z| z.strftime("%Y-%m-%d %H:%M:%S").to_string(),
+            );
+
+            let other_acc = trade
+                .other_account
+                .as_deref()
+                .filter(|value| !value.is_empty())
+                .unwrap_or("\\N");
+
+            let _ = writeln!(
+                copy_payload_buffer,
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                trade.trade_id,
+                trade.account_id,
+                trade.user_id,
+                trade.direction,
+                trade.symbol_ticker,
+                created,
+                updated,
+                trade.quantity,
+                trade.price,
+                other_acc
+            );
+        }
     }
+
+    msg_ids
+}
+
+#[derive(Deserialize)]
+struct TradePayload {
+    trade_id: String,
+    account_id: String,
+    user_id: String,
+    direction: String,
+    symbol_ticker: String,
+    created_at: i64,
+    updated_at: i64,
+    quantity: i32,
+    price: String,
+    other_account: Option<String>,
 }
 
 fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {
@@ -281,4 +245,25 @@ fn log_postgres_error(context: &str, err: &tokio_postgres::Error) {
     } else {
         error!("{}: {}", context, err);
     }
+}
+
+async fn ack_and_trim_stream(
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+    stream_name: &str,
+    consumer_group: &str,
+    msg_ids: &[String],
+) -> Result<(), redis::RedisError> {
+    let _: usize = redis_conn
+        .xack(stream_name, consumer_group, msg_ids)
+        .await?;
+
+    let _: usize = redis_conn
+        .xtrim_options(
+            stream_name,
+            &StreamTrimOptions::maxlen(StreamTrimmingMode::Exact, 0)
+                .set_deletion_policy(StreamDeletionPolicy::Acked),
+        )
+        .await?;
+
+    Ok(())
 }
