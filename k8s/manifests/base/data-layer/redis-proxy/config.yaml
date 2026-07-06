@@ -9,8 +9,13 @@ data:
     defaults
         mode tcp
         timeout connect 5s
-        timeout client 30s
-        timeout server 30s
+        timeout client 10m
+        timeout server 10m
+        default-server init-addr last,libc,none
+
+    resolvers k8s
+        parse-resolv-conf
+        hold valid 10s
 
     frontend redis_front
         bind *:6379
@@ -19,13 +24,10 @@ data:
     backend redis_back
         mode tcp
         option tcp-check
-        # Ensure we only send traffic to a node that explicitly says "role:master"
         tcp-check send PING\r\n
         tcp-check expect string +PONG
         tcp-check send info\ replication\r\n
         tcp-check expect string role:master
-        
-        # We explicitly set the check interval so the proxy learns the master role quickly
-        server redis-0 redis-node-0.redis-headless.data.svc.cluster.local:6379 check inter 2s rise 1 fall 1
-        server redis-1 redis-node-1.redis-headless.data.svc.cluster.local:6379 check inter 2s rise 1 fall 1
-        server redis-2 redis-node-2.redis-headless.data.svc.cluster.local:6379 check inter 2s rise 1 fall 1
+        server redis-0 redis-node-0.redis-headless.data.svc.cluster.local:6379 check inter 2s rise 1 fall 1 resolvers k8s resolve-prefer ipv4
+        server redis-1 redis-node-1.redis-headless.data.svc.cluster.local:6379 check inter 2s rise 1 fall 1 resolvers k8s resolve-prefer ipv4
+        server redis-2 redis-node-2.redis-headless.data.svc.cluster.local:6379 check inter 2s rise 1 fall 1 resolvers k8s resolve-prefer ipv4
