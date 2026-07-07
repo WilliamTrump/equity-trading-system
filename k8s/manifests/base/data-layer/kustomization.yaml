@@ -4,4 +4,5 @@ kind: Kustomization
 resources:
   - postgres
   - redis
+  - redis-proxy
   - pgbouncer
