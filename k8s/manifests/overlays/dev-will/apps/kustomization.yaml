@@ -3,6 +3,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../base/apps
+  - gzip-middleware.yaml
 
 images:
   # - name: ghcr.io/sm26-industrial-software-dev/api
@@ -59,3 +60,18 @@ patches:
                   limits:
                     cpu: "1000m"
                     memory: "1Gi"
+  # Local laptop dev only (dev-will): chain the new gzip-compress middleware
+  # (gzip-middleware.yaml) in front of the existing streamlit-fallback
+  # middleware so AgGrid's ~4.6MB JS bundle is compressed in transit instead
+  # of sent raw. Only adds to the annotation value -- affinity and the
+  # session-cookie-name annotations from base are untouched.
+  - target:
+      kind: Ingress
+      name: streamlit-ingress
+    patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: streamlit-ingress
+        annotations:
+          traefik.ingress.kubernetes.io/router.middlewares: "networking-gzip-compress@kubernetescrd,networking-streamlit-fallback@kubernetescrd"
