@@ -32,14 +32,14 @@ spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - ui
+        - streamlit
   defaultBackend:
     service:
       name: error-page
       port:
         number: 80
   rules:
-    - host: ui
+    - host: streamlit
       http:
         paths:
           - path: /
