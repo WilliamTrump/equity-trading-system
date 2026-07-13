@@ -1,4 +1,4 @@
-.PHONY: logs-api logs-ui logs-worker logs-syncer logs-cacher logs-adminer logs-postgres logs-pooler logs-redis logs-flux logs-keda logs-all
+.PHONY: logs-api logs-ui logs-worker logs-syncer logs-cacher logs-timeseries logs-adminer logs-postgres logs-pooler logs-redis logs-flux logs-keda logs-all
 
 # ==========================================
 # 📜 LOGS
@@ -23,6 +23,10 @@ logs-syncer: ## 📜 DB-Syncer logs...
 logs-cacher: ## 📜 price-cacher logs...
 	@echo "📜 price-cacher logs..."
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=price-cacher -n backend --tail=100 -f
+
+logs-timeseries: ## 📜 price-timeseries-cacher logs...
+	@echo "📜 price-timeseries-cacher logs..."
+	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=price-timeseries-cacher -n backend --tail=100 -f
 
 logs-adminer: ## 📜 Adminer logs...
 	@echo "📜 Adminer logs..."
@@ -55,5 +59,6 @@ logs-all: ## 📜 All pods (last 50 lines each, no follow)...
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=trade-writer -n backend    --tail=50 --prefix
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=db-syncer  -n backend      --tail=50 --prefix
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=price-cacher  -n backend      --tail=50 --prefix
+	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=price-timeseries-cacher  -n backend      --tail=50 --prefix
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l cnpg.io/cluster=trading-db -n data --tail=50 --prefix
 	@$(DOCKER) exec -i k8s-toolbox kubectl logs -l app=redis      -n data         --tail=50 --prefix
