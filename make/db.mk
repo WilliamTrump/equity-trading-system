@@ -1,8 +1,41 @@
-.PHONY: db-backup db-restore psql redis-cli redis-sentinel adminer-info
+.PHONY: db-backup db-restore db-clear psql redis-cli redis-sentinel adminer-info
 
 # ==========================================
 # 💾 DATABASE OPERATIONS
 # ==========================================
+
+db-clear: ## ⚠️ WIPE the entire trading database (Destructive)
+	@echo "============================================="
+	@echo "    ⚠️  DATABASE WIPE MENU"
+	@echo "============================================="
+	@echo "WARNING: This will permanently DROP all tables and data!"
+	@read -p "Are you absolutely sure? (y/N): " confirm; \
+	case "$$confirm" in [Yy]) \
+		echo "💥 Truncating all data in the public schema..."; \
+		$(DOCKER) exec -it k8s-toolbox bash -c '\
+			POD=$$(kubectl get pods -n data -l "cnpg.io/cluster=trading-db,cnpg.io/instanceRole=primary" -o jsonpath="{.items[0].metadata.name}") && \
+			kubectl exec -n data $$POD -- psql -U postgres -d trading -c "TRUNCATE TABLE trades, accounts, users, positions, users_sync_stage, accounts_sync_stage, positions_sync_stage CASCADE;" \
+		'; \
+		echo "🧹 Flushing Redis Cache..."; \
+		$(DOCKER) exec -it k8s-toolbox bash -c '\
+			REDIS_POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis" -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || kubectl get pods -n data -l "app=redis" -o jsonpath="{.items[0].metadata.name}") && \
+			kubectl exec -n data $$REDIS_POD -- sh -c "redis-cli --scan | xargs -r redis-cli del" \
+		'; \
+		echo "✅ Database data and Redis completely cleared!"; \
+		echo "♻️ Restarting dependent deployments to flush stale DB connections..."; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trading-pooler -n data; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trading-pooler-ro -n data; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/adminer -n data; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/fastapi-api -n backend; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trade-writer -n backend; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/db-syncer -n backend; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-cacher -n backend; \
+		$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/price-timeseries-cacher -n backend; \
+		;; \
+	*) \
+		echo "Aborted."; \
+		;; \
+	esac
 
 adminer-info: ## 🌐 Adminer UI: http://adminer.localhost:8080
 	@echo "🌐 Adminer UI: http://adminer.localhost:8080"
@@ -25,15 +58,39 @@ redis-sentinel: ## 🛡️ Connecting to Redis Sentinel CLI...
 	@$(DOCKER) exec -it k8s-toolbox bash -c 'POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis,app.kubernetes.io/component=sentinel" -o jsonpath="{.items[0].metadata.name}"); kubectl exec -it $$POD -n data -- redis-cli -p 26379 info sentinel'
 
 db-backup: ## 💾 Take a snapshot of the trading DB and save to project root
-	@echo "💾 Taking snapshot of 'trading' database from primary node..."
-	@$(DOCKER) exec -it k8s-toolbox bash -c '\
+	@echo "============================================="
+	@echo "    💾 DATABASE BACKUP MENU"
+	@echo "============================================="
+	@read -p "Enter backup name (default: trading_backup): " input; \
+	bname="trading_backup"; \
+	if [ -n "$$input" ]; then bname="$$input"; fi; \
+	bname=$${bname// /_}; \
+	while [ -f "$${bname}.dump" ]; do \
+		read -p "⚠️  File $${bname}.dump exists! (o)verwrite, (a)utoincrement, (r)ename, or (c)ancel? " choice; \
+		case "$$choice" in \
+			[Oo]*) break ;; \
+			[Aa]*) \
+				i=1; \
+				while [ -f "$${bname}_$${i}.dump" ]; do i=$$((i+1)); done; \
+				bname="$${bname}_$${i}"; \
+				echo "✅ Autoincremented to $${bname}.dump"; \
+				break ;; \
+			[Rr]*) \
+				read -p "Enter new backup name: " input; \
+				if [ -n "$$input" ]; then bname="$$input"; fi; \
+				;; \
+			*) echo "Aborted."; exit 1 ;; \
+		esac; \
+	done; \
+	echo "💾 Taking snapshot of 'trading' database from primary node..."; \
+	$(DOCKER) exec -e BNAME="$$bname" -it k8s-toolbox bash -c '\
 		POD=$$(kubectl get pods -n data -l "cnpg.io/cluster=trading-db,cnpg.io/instanceRole=primary" -o jsonpath="{.items[0].metadata.name}") && \
 		echo "📦 Creating dump inside pod $$POD..." && \
-		kubectl exec -n data $$POD -- pg_dump -U postgres -d trading -F c -f /dev/shm/trading_backup.dump && \
-		echo "⬇️ Copying backup to host..." && \
-		kubectl cp data/$$POD:/dev/shm/trading_backup.dump /workspace/trading_backup.dump \
-	'
-	@echo "✅ Backup successfully saved to ./trading_backup.dump!"
+		kubectl exec -n data $$POD -- pg_dump -U postgres -d trading -F c -f /dev/shm/dump.tmp && \
+		echo "⬇️ Copying backup to host as \"$$BNAME.dump\"..." && \
+		kubectl cp data/$$POD:/dev/shm/dump.tmp "/workspace/$$BNAME.dump" \
+	'; \
+	echo "✅ Backup successfully saved to ./$$bname.dump!"
 
 db-restore: ## ⚠️ RESTORE snapshot to the trading DB (Destructive)
 	@echo "============================================="
@@ -50,14 +107,19 @@ db-restore: ## ⚠️ RESTORE snapshot to the trading DB (Destructive)
 		if [ -n "$$file" ]; then \
 			echo "⚠️  WARNING: This will drop and replace the current 'trading' database!"; \
 			echo "⏳ Copying $$file into the primary pod and restoring..."; \
-			$(DOCKER) exec -it k8s-toolbox bash -c '\
+			$(DOCKER) exec -e BNAME="$$file" -it k8s-toolbox bash -c '\
 				POD=$$(kubectl get pods -n data -l "cnpg.io/cluster=trading-db,cnpg.io/instanceRole=primary" -o jsonpath="{.items[0].metadata.name}") && \
 				echo "⬆️ Copying backup file into pod $$POD..." && \
-				kubectl cp /workspace/'"$$file"' data/$$POD:/dev/shm/trading_backup.dump && \
+				kubectl cp "/workspace/$$BNAME" data/$$POD:/dev/shm/trading_backup.dump && \
 				echo "🔥 Restoring database (with clean)..." && \
-				kubectl exec -n data $$POD -- pg_restore -U postgres -d trading -c /dev/shm/trading_backup.dump \
+				kubectl exec -n data $$POD -- pg_restore -U postgres -d trading --clean --if-exists /dev/shm/trading_backup.dump \
 			'; \
 			echo "✅ Database restored successfully!"; \
+			echo "🧹 Flushing Redis Cache to prevent state mismatch..."; \
+			$(DOCKER) exec -it k8s-toolbox bash -c '\
+				REDIS_POD=$$(kubectl get pods -n data -l "app.kubernetes.io/name=redis" -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || kubectl get pods -n data -l "app=redis" -o jsonpath="{.items[0].metadata.name}") && \
+				kubectl exec -n data $$REDIS_POD -- sh -c "redis-cli --scan | xargs -r redis-cli del" \
+			'; \
 			echo "♻️ Restarting dependent deployments to flush stale DB connections..."; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trading-pooler -n data; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trading-pooler-ro -n data; \

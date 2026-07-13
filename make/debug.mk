@@ -1,9 +1,35 @@
-.PHONY: bounce-api
+.PHONY: bounce
 
-## ==========================================
-# 🕵️ DOWNWARD API & ENV DEBUGGING
 # ==========================================
+# 🔄 ROLLING RESTARTS (BOUNCING)
+# ==========================================
+BOUNCE_BANK = fastapi streamlit locust adminer db-syncer trade-writer price-cacher price-timeseries-cacher poolers
 
-bounce-api: ## 3. Force a graceful restart of the FastAPI pods to pick up new Env Vars
-	@echo "🔄 Forcing a rolling restart of the FastAPI deployment..."
-	@$(DOCKER) exec k8s-toolbox kubectl rollout restart deployment/fastapi-api -n backend
+bounce: ## 🔄 Interactive menu to safely restart a deployment
+	@echo "============================================="
+	@echo "    🔄 EQUITY TRADING APP - BOUNCER"
+	@echo "============================================="
+	@PS3="Select an app to safely rollout restart (or type a number to exit): "; \
+	select app in $(BOUNCE_BANK) "Exit"; do \
+		if [ "$$app" = "Exit" ]; then echo "Gracefully exiting bouncer."; break; fi; \
+		if [ -n "$$app" ]; then \
+			ns=$$(case $$app in \
+				locust) echo "load-testing";; \
+				streamlit) echo "frontend";; \
+				adminer|poolers) echo "data";; \
+				*) echo "backend";; \
+			esac); \
+			if [ "$$app" = "poolers" ]; then \
+				echo "♻️ Bouncing both Read-Write and Read-Only poolers..."; \
+				$(DOCKER) exec k8s-toolbox kubectl rollout restart deployment/trading-pooler -n data; \
+				$(DOCKER) exec k8s-toolbox kubectl rollout restart deployment/trading-pooler-ro -n data; \
+			elif [ "$$app" = "fastapi" ]; then \
+				echo "♻️ Bouncing fastapi-api in backend..."; \
+				$(DOCKER) exec k8s-toolbox kubectl rollout restart deployment/fastapi-api -n backend; \
+			else \
+				echo "♻️ Bouncing $$app in $$ns..."; \
+				$(DOCKER) exec k8s-toolbox kubectl rollout restart deployment/$$app -n $$ns; \
+			fi; \
+			break; \
+		fi; \
+	done
