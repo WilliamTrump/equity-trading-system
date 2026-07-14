@@ -46,7 +46,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: streamlit-svc
+                name: traefik-proxy
                 port:
                   number: 80
 ---
