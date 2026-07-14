@@ -25,6 +25,7 @@ resources:
   - trade-writer
   - db-syncer
   - adminer
+  - redisinsight
   - price-cacher
   - price-timeseries-cacher
 
