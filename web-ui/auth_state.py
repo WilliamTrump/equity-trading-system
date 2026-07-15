@@ -60,22 +60,25 @@ def _decode_cookie(val):
 def init_auth():
     # st.context.cookies reads straight from the incoming HTTP request
     # headers -- it's synchronous and always correct on the very first
-    # script run of a fresh session. CookieController is a JS-backed
-    # custom component: on a fresh session it returns its default ({})
-    # until a round-trip to the browser completes, which needs an extra
-    # rerun. Relying on that as a read fallback made the restored-login
-    # state (and therefore which page/layout renders) flicker across
-    # reruns on a hard reload. Reading is only ever needed from
-    # st.context.cookies; CookieController is still needed for writes
-    # (remember_login/forget_login), since that's the only way Python
-    # can hand a value to the browser's document.cookie.
-    cookie_user = _decode_cookie(st.context.cookies.get("eq_username"))
-    cookie_session = _decode_cookie(st.context.cookies.get("eq_session"))
+   # script run of a fresh session. But it's a SNAPSHOT of that one
+   # request: it does not update when a cookie changes mid-session via
+   # CookieController (forget_login/remember_login), since those don't
+   # trigger a new HTTP request. So this restore-from-cookie step must
+   # only run once per live session -- otherwise, after forget_login()
+   # clears username and triggers a rerun, this would immediately read
+   # the still-stale (pre-logout) cookie snapshot and undo the logout
+   # on the very next run. A real reload starts a fresh session, so
+   # the flag below resets and the restore correctly re-runs against
+   # that new request's actual current cookies.
+    if not st.session_state.get("_cookie_restore_attempted"):
+        st.session_state._cookie_restore_attempted = True
+        cookie_user = _decode_cookie(st.context.cookies.get("eq_username"))
+        cookie_session = _decode_cookie(st.context.cookies.get("eq_session"))
 
-    if st.session_state.get("username") is None and cookie_user:
-        st.session_state.username = cookie_user
-        st.session_state.saved_session_cookie = cookie_session
-        st.session_state.session_validated = False
+        if st.session_state.get("username") is None and cookie_user:
+            st.session_state.username = cookie_user
+            st.session_state.saved_session_cookie = cookie_session
+            st.session_state.session_validated = False
 
     # If we have cookies but haven't validated the session in this streamlit instance yet
     if get_session_cookie() and get_username():
@@ -98,16 +101,17 @@ def init_auth():
         st.session_state.username = None
         st.session_state.saved_session_cookie = None
 
-def render_user_sidebar():
+def render_user_sidebar(pages=None):
     username = get_username()
     if username:
-        st.sidebar.markdown(f"👤 **{username}**")
+        for p in (pages or []):
+            st.sidebar.page_link(p)
         st.sidebar.divider()
+        st.sidebar.markdown(f"👤 **{username}**")
         if st.sidebar.button("🚪 Log Out", use_container_width=True):
             from api_client import logout
             logout()
             forget_login()
-            st.session_state.redirect_to = "pages/login.py"
             st.rerun()
 
 def require_auth():

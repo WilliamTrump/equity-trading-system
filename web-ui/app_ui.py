@@ -8,17 +8,12 @@ st.set_page_config(page_title="Equity Trading System", page_icon="📈", layout=
 apply_theme()
 auth_state.init_auth()
 
-def home_page():
-    st.markdown("<style>[data-testid='stSidebar'] {display: none;} [data-testid='collapsedControl'] {display: none;}</style>", unsafe_allow_html=True)
-    from auth_pages import render_register_page
-    st.title("📈 Equity Trading System", anchor=False)
-    st.subheader("Welcome to the platform. Please register to continue.", anchor=False)
-    render_register_page()
+
 
 print(f"DEBUG: Auth Check - Current username: {auth_state.get_username()}")
 st.markdown('<style>#stDecoration {display: none;}</style>', unsafe_allow_html=True)
 
-p_home = st.Page(home_page, title="Register", icon="🏠", default=True)
+p_home = st.Page("pages/register.py", title="Register", icon="🏠", default=True)
 p_login = st.Page("pages/login.py", title="Login", icon="🔑", url_path="login")
 
 p_my_accounts = st.Page("pages/my_accounts.py", title="My Accounts", icon="👤")
@@ -40,12 +35,9 @@ auth_pages = [
 ]
 all_pages = [p_home, p_login] + auth_pages
 
-if auth_state.get_username():
-    pg = st.navigation(auth_pages)
-else:
-    pg = st.navigation(all_pages, position="hidden")
+pg = st.navigation(all_pages, position="hidden")
 
-auth_state.render_user_sidebar()
+auth_state.render_user_sidebar(auth_pages)
 
 if "redirect_to" in st.session_state:
     redirect_page = st.session_state.pop("redirect_to")

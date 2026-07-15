@@ -29,7 +29,8 @@ def render_login_page():
         else:
             st.error(result.get("message", "Login failed"))
 
-    st.markdown("Don't have an account? <a href='/' target='_self'>Register here</a>", unsafe_allow_html=True)
+    st.caption("Don't have an account?")
+    st.page_link("pages/register.py", label="Register here")
 
 
 def render_register_page():
@@ -44,7 +45,6 @@ def render_register_page():
             login_result = login(username, password)
             if login_result["status"] == "success":
                 auth_state.remember_login(username, login_result["session_cookie"])
-                st.success(f"Account created for {result['username']}. Logging you in...")
                 st.session_state.redirect_to = "pages/my_accounts.py"
                 st.rerun()
             else:
@@ -53,4 +53,5 @@ def render_register_page():
         else:
             st.error(result["message"])
 
-    st.markdown('Already have an account? <a href="login" target="_self">Log in here</a>', unsafe_allow_html=True)
+    st.caption("Already have an account?")
+    st.page_link("pages/login.py", label="Log in here")
