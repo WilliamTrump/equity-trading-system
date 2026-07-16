@@ -63,16 +63,29 @@ def render_create_account_page():
             _invalidate_account_options_cache()
             account_id = result.get("account_id")
             display_name = result.get("name") or name or "(unnamed account)"
-            if account_id:
-                st.success(f"Account **{display_name}** created — ID: `{account_id}`")
-            else:
-                st.success("Account created.")
+            st.session_state["_created_account_id"] = account_id
+            st.session_state["_created_account_name"] = display_name
         else:
             st.error(result["message"])
 
+    created_id = st.session_state.get("_created_account_id")
+    created_name = st.session_state.get("_created_account_name")
+    if created_id:
+        st.success(f"Account **{created_name}** created — ID: `{created_id}`")
+        col1, col2 = st.columns(2)
+        if col1.button("💸 Enter a Trade", type="primary"):
+            st.session_state.jump_to_trade_account = created_id
+            st.session_state.pop("_created_account_id", None)
+            st.session_state.pop("_created_account_name", None)
+            st.switch_page("pages/enter_trade.py")
+        if col2.button("📋 Mass Trade"):
+            st.session_state.pop("_created_account_id", None)
+            st.session_state.pop("_created_account_name", None)
+            st.switch_page("pages/mass_trade.py")
+
 
 def render_update_account_page():
-    st.header("✏️ Edit Account Settings", anchor=False)
+    st.header("✏️ Edit Account", anchor=False)
     st.caption("PATCH /users/update_account_details/{account_id}")
 
     account_id = account_select()

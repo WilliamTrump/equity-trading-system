@@ -67,7 +67,7 @@ def _all_trades_fragment():
 
 
 def render_all_trades_page():
-    st.header("📜 Trades", anchor=False)
+    st.header("📜 Trade History", anchor=False)
     st.caption("GET /trades")
     col1, col2 = st.columns(2)
     prefilled = st.session_state.pop("jump_to_trades_account", None)
@@ -95,36 +95,6 @@ def render_all_trades_page():
 
 
 
-
-@st.fragment(run_every="15s")
-def _trade_by_id_fragment(trade_id):
-    result = get_trade_by_id(trade_id)
-    if result["status"] != "success":
-        st.error(result["message"])
-        return
-
-    trade = result["data"]
-    if not trade:
-        st.info("No trade found with that ID.")
-        return
-
-    _trade_card(trade)
-
-
-def render_trade_by_id_page():
-    st.header("🔍 Look Up Trade by ID", anchor=False)
-    st.caption("GET /trade/{trade_id}")
-
-    with st.form("trade_by_id_form"):
-        trade_id = st.text_input("Trade ID")
-        submitted = st.form_submit_button("Load Trade")
-
-    if submitted:
-        st.session_state.trade_by_id_query = trade_id
-
-    query = st.session_state.get("trade_by_id_query")
-    if query:
-        _trade_by_id_fragment(query)
 
 
 def render_update_trade_page():

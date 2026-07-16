@@ -248,7 +248,7 @@ def _render_success_state():
 
 
 def render_mass_trade_page():
-    st.header("📋 Mass Trade Booker", anchor=False)
+    st.header("📋 Mass Trade", anchor=False)
 
     # Once a batch has been submitted, show only the success state above
     # (with "Book More Trades" up top) until the user explicitly starts a
