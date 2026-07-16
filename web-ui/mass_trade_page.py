@@ -224,9 +224,12 @@ def _render_success_state():
     successes = data.get("successes", []) if isinstance(data, dict) else []
     failures = data.get("failures", []) if isinstance(data, dict) else []
 
-    if st.button("📋 Book More Trades", type="primary"):
+    col1, col2, _ = st.columns([1, 1, 3])
+    if col1.button("📋 Book More Trades", type="primary"):
         _reset_mass_trade_state()
         st.rerun()
+    if col2.button("📜 View Trades", type="primary"):
+        st.switch_page("pages/trade_history.py")
 
     if failures:
         st.warning(
