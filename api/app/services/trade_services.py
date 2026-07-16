@@ -113,16 +113,23 @@ async def individual_trade(user_id: str, trade: dict):
                     status_code=403,
                     detail=f"Account number {trade['account_id']} does not have permission to short",
                 )
+
             new_position = (
                 trade["quantity"]
                 if trade["direction"] == "Buy"
                 else 0 - trade["quantity"]
             )
+
+            average_cost = trade["price"]
+            total_realized_gains = 0
+
             position_key = str(uuid.uuid4())
             position_data = {
                 "account_id": trade["account_id"],
                 "symbol_ticker": trade["ticker"],
                 "quantity": new_position,
+                "average_cost": average_cost,
+                "total_realized_gains": total_realized_gains,
                 "created_at": now_str,
                 "updated_at": now_str,
             }
@@ -151,6 +158,13 @@ async def individual_trade(user_id: str, trade: dict):
             specific_position = json.loads(raw_specific_position)
 
             # Edit the existing position data
+            new_average_cost, realized_pnl = calculate_p_and_l_changes(
+                trade, specific_position, new_position
+            )
+            specific_position["average_cost"] = new_average_cost
+            specific_position["total_realized_gains"] = (
+                specific_position["total_realized_gains"] + realized_pnl
+            )
             specific_position["quantity"] = new_position
             specific_position["updated_at"] = now_str
 
@@ -288,3 +302,47 @@ async def get_account_data(account_id: str) -> dict:
             status_code=404, detail=f"Account number {account_id} does not exist"
         )
     return json.loads(raw_account)
+
+
+def calculate_p_and_l_changes(trade: dict, specific_position: dict, new_position: int):
+    qty = specific_position["quantity"]
+    avg = specific_position["average_cost"]
+
+    trade_qty = trade["quantity"]
+    trade_price = trade["price"]
+
+    new_avg_cost = specific_position["average_cost"]
+    realized_gains = 0
+
+    if qty == 0:
+        return trade_price, 0
+
+    if qty > 0 and trade["direction"] == "Buy":
+        new_avg_cost = (avg * qty + trade_price * trade_qty) / (qty + trade_qty)
+
+    elif qty > 0 and trade["direction"] == "Sell":
+        if new_position > 0:
+            realized_gains = (trade_price - avg) * trade_qty
+        elif new_position == 0:
+            realized_gains = (trade_price - avg) * trade_qty
+            new_avg_cost = 0
+        else:
+            realized_gains = (trade_price - avg) * qty
+            new_avg_cost = trade_price
+
+    elif qty < 0 and trade["direction"] == "Sell":
+        new_avg_cost = (avg * abs(qty) + trade_price * trade_qty) / (
+            abs(qty) + trade_qty
+        )
+
+    elif qty < 0 and trade["direction"] == "Buy":
+        if new_position < 0:
+            realized_gains = (avg - trade_price) * trade_qty
+        elif new_position == 0:
+            realized_gains = (avg - trade_price) * trade_qty
+            new_avg_cost = 0
+        else:
+            realized_gains = (avg - trade_price) * abs(qty)
+            new_avg_cost = trade_price
+
+    return new_avg_cost, realized_gains
