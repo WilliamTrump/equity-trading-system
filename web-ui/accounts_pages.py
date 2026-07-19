@@ -8,10 +8,9 @@ from account_picker import account_select, _invalidate_account_options_cache
 def _accounts_list_fragment():
     result = get_user_accounts()
     if result["status"] == "success":
-        # Backend returns {"accounts": {name: account_id, ...}}
-        accounts = result["data"].get("accounts", {})
+        accounts = result["data"].get("accounts", [])
     else:
-        accounts = {}
+        accounts = []
         st.error(result["message"])
 
     if not accounts:
@@ -20,8 +19,9 @@ def _accounts_list_fragment():
             st.session_state.redirect_to = "pages/open_account.py"
             st.rerun()
     else:
-        for name, account_id in accounts.items():
-            display_name = name or "(unnamed account)"
+        for acct in accounts:
+            display_name = acct.get("account_name") or "(unnamed account)"
+            account_id = acct["account_id"]
             with st.container(border=True):
                 cols = st.columns([3, 2, 2, 2])
                 cols[0].write(f"**{display_name}**")
@@ -88,7 +88,7 @@ def render_update_account_page():
     st.header("✏️ Edit Account", anchor=False)
     st.caption("PATCH /users/update_account_details/{account_id}")
 
-    from account_picker import get_account_name
+    from account_picker import get_account_name, get_account_can_short
 
     account_id = account_select()
     
@@ -185,27 +185,24 @@ def render_update_account_page():
             width=0
         )
 
-    can_short_option = st.radio(
-        "Can Short",
-        options=["Keep Current", "Yes", "No"],
-        horizontal=True
-    )
+    current_can_short = False
+    if account_id:
+        current_can_short = get_account_can_short(account_id)
+        
+    can_short = st.checkbox("Can Short", value=current_can_short, key=f"can_short_{account_id or 'none'}")
+    
+    can_short_changed = False
+    if account_id:
+        can_short_changed = (can_short != current_can_short)
 
     if st.button("Update Account"):
         if not account_id:
             st.error("Select an account first.")
         else:
-            if can_short_option == "Yes":
-                can_short = True
-            elif can_short_option == "No":
-                can_short = False
-            else:
-                can_short = None
-
             result = update_user_account(
                 account_id,
                 account_name=account_name if name_changed else None,
-                can_short=can_short,
+                can_short=can_short if can_short_changed else None,
             )
             if result["status"] == "success":
                 _invalidate_account_options_cache()
