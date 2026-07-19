@@ -138,9 +138,6 @@ db-restore: ## ⚠️ RESTORE snapshot to the trading DB (Destructive)
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/fastapi-api -n backend; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/trade-writer -n backend; \
 			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/db-syncer -n backend; \
-			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/adminer -n data; \
-			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/streamlit -n frontend; \
-			$(DOCKER) exec -it k8s-toolbox kubectl rollout restart deployment/locust-load-tester -n load-testing; \
 			break; \
 		fi; \
 	done
